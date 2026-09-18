@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#eef1f6">
+<meta name="color-scheme" content="only light">
+<title>יומן מכירות</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root {
+    --bg: #eef1f6;
+    --card: #f8f9fb;
+    --cell: #ffffff;
+    --border: #dde2ea;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --gross: #1e3a8a;
+    --net: #047857;
+    --net-soft: #dcf3e8;
+    --sale-bg: #ecf8f2;
+    --sale-border: #9ed8bb;
+    --week-bg: #e5e9f0;
+    --accent: #2563eb;
+    --accent-soft: #e0e9fd;
+    --owe: #c2410c;
+    --owe-soft: #ffedd5;
+    --danger: #dc2626;
+  }
+
+  * { box-sizing: border-box; margin: 0; }
+  html { -webkit-text-size-adjust: 100%; height: 100%; color-scheme: only light; }
+  body {
+    font-family: system-ui, -apple-system, Roboto, "Noto Sans Hebrew", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    padding: max(8px, env(safe-area-inset-top)) 6px max(8px, env(safe-area-inset-bottom));
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .num { direction: ltr; unicode-bidi: isolate; font-variant-numeric: tabular-nums; }
+  .fit { display: block; white-space: nowrap; overflow: hidden; }
+
+  .app {
+    height: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+
+  /* ---------- Top bar ---------- */
+  .bar { display: flex; align-items: center; gap: 6px; padding: 0 4px; }
+  .title { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+  .title h1 { font-size: 23px; font-weight: 800; white-space: nowrap; }
+  .today-btn {
+    border: none; background: var(--accent-soft); color: var(--accent);
+    font-size: 13px; font-weight: 700;
+    padding: 5px 10px; border-radius: 999px;
+    display: none;
+  }
+  .today-btn.show { display: inline-block; }
+  .icon-btn {
+    width: 44px; height: 44px; flex: none;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--cell);
+    font-size: 24px; line-height: 1;
+    display: grid; place-items: center;
+  }
+  .icon-btn:active { transform: scale(.94); }
+  .icon-btn.menu { border: none; background: transparent; font-size: 22px; width: 36px; }
+
+  /* ---------- Totals ---------- */
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .stat {
+    background: var(--week-bg);
+    border-radius: 12px;
+    padding: 7px 9px;
+    min-width: 0;
+  }
+  .stat .label { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .stat .value { font-weight: 800; font-size: 19px; }
+  .stat .value.gross { color: var(--gross); }
+  .stat.net { background: var(--net-soft); }
+  .stat .value.net { color: var(--net); }
+  .stat.owe { background: var(--owe-soft); }
+  .stat.owe .value { color: var(--owe); }
+  .stat.clear { background: var(--net-soft); }
+  .stat.clear .value { color: var(--net); }
+
+  /* ---------- Calendar ---------- */
+  .cal {
+    flex: 1; min-height: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 6px 5px;
+  }
+  .grid {
+    height: 100%;
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) minmax(0, 1.3fr);
+    gap: 3px;
+  }
+  .grid.slide-next { animation: slideNext .22s ease; }
+  .grid.slide-prev { animation: slidePrev .22s ease; }
+  @keyframes slideNext { from { opacity: .3; transform: translateX(-18px); } }
+  @keyframes slidePrev { from { opacity: .3; transform: translateX(18px); } }
+
+  .dow { text-align: center; font-weight: 700; font-size: 14px; color: var(--muted); padding: 2px 0 4px; }
+  .dow.wk { color: var(--accent); }
+
+  .day, .week { min-height: 0; border-radius: 10px; overflow: hidden; }
+  .day {
+    background: var(--cell);
+    border: 1px solid var(--border);
+    padding: 5px 1px;
+    display: flex; flex-direction: column; align-items: stretch;
+    text-align: start;
+    transition: transform .08s;
+  }
+  .day:active, .week.tap:active { transform: scale(.94); }
+  .day .d { font-weight: 700; font-size: 15px; padding-inline-start: 4px; }
+  .day .amt { margin-top: auto; text-align: center; font-weight: 800; font-size: 12.5px; color: var(--gross); letter-spacing: -.3px; }
+  .day .dnet { text-align: center; font-weight: 700; font-size: 11px; color: var(--net); letter-spacing: -.3px; }
+  .day.has { background: var(--sale-bg); border-color: var(--sale-border); }
+  .day.today { border-color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+  .day.today .d { color: var(--accent); }
+  .day.out { opacity: .45; border-style: dashed; }
+
+  .week {
+    background: var(--week-bg);
+    border: none;
+    padding: 3px 3px;
+    display: flex; flex-direction: column; justify-content: center; gap: 0;
+    text-align: center;
+  }
+  .week > * { flex-shrink: 0; }
+  .week .lbl { display: block; font-size: 9.5px; line-height: 1.15; color: var(--muted); font-weight: 600; }
+  .wk-g { font-weight: 800; font-size: 13px; color: var(--gross); letter-spacing: -.3px; }
+  .wk-n { font-weight: 800; font-size: 12.5px; color: var(--net); letter-spacing: -.3px; }
+  .wk-p {
+    margin-top: 3px;
+    font-weight: 800; font-size: 11.5px; letter-spacing: -.3px;
+    border-radius: 6px; padding: 2px 1px;
+  }
+  .wk-p.ok { background: var(--net-soft); color: var(--net); }
+  .wk-p.part, .wk-p.none { background: var(--owe-soft); color: var(--owe); }
+  .grid.tight .week .lbl { display: none; }
+  .dash { color: var(--muted); font-weight: 700; }
+
+  .warn {
+    display: none;
+    background: #fef3c7; color: #78350f; border: 1px solid #f59e0b;
+    border-radius: 12px; padding: 8px 12px; font-size: 13px; line-height: 1.45;
+  }
+  .warn.show { display: block; }
+
+  /* ---------- Bottom sheets ---------- */
+  .backdrop {
+    position: fixed; inset: 0; z-index: 10;
+    background: rgba(15, 23, 42, .45);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .backdrop.open { opacity: 1; pointer-events: auto; }
+  .sheet {
+    background: var(--card);
+    width: 100%; max-width: 560px;
+    max-height: 100%; overflow-y: auto;
+    border-radius: 22px 22px 0 0;
+    padding: 20px 16px calc(18px + env(safe-area-inset-bottom));
+    transform: translateY(100%); transition: transform .25s ease;
+    display: flex; flex-direction: column; gap: 14px;
+    user-select: text;
+  }
+  .backdrop.open .sheet { transform: none; }
+  .sheet h2 { font-size: 20px; }
+  .field {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--cell); border: 2px solid var(--border); border-radius: 14px;
+    padding: 0 14px;
+  }
+  .field:focus-within { border-color: var(--accent); }
+  .field .cur { font-size: 24px; color: var(--muted); }
+  .field input {
+    flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--text);
+    font: inherit; font-size: 30px; font-weight: 800; padding: 12px 0;
+    direction: ltr; text-align: right;
+  }
+  .field input::placeholder { font-size: 18px; font-weight: 600; color: #9ca3af; }
+  .field input:placeholder-shown { direction: rtl; }
+  .preview {
+    display: flex; justify-content: space-between;
+    background: var(--net-soft); color: var(--net);
+    border-radius: 12px; padding: 12px 14px; font-weight: 700;
+  }
+  .preview.owe { background: var(--owe-soft); color: var(--owe); }
+  .hint { font-size: 13px; color: var(--muted); }
+  .actions { display: flex; gap: 8px; }
+  .actions .primary { flex: 1; }
+  .btn {
+    border: 1px solid var(--border); background: var(--cell);
+    border-radius: 12px; padding: 12px 16px; min-height: 50px;
+    font-weight: 700; font-size: 16px;
+  }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.danger { color: var(--danger); }
+  .btn.green { background: var(--net-soft); border-color: var(--sale-border); color: var(--net); }
+  .btn:active { transform: scale(.98); }
+  .btn.block { width: 100%; text-align: start; }
+
+  .sum3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .sum3 > div { background: var(--week-bg); border-radius: 12px; padding: 8px 10px; min-width: 0; }
+  .sum3 span { display: block; font-size: 12px; color: var(--muted); }
+  .sum3 b { font-size: 18px; }
+  .sum3 .gross { color: var(--gross); }
+  .sum3 .net { color: var(--net); }
+
+  .paylist { display: flex; flex-direction: column; gap: 6px; }
+  .paylist:empty { display: none; }
+  .paylist h3 { font-size: 14px; color: var(--muted); font-weight: 600; }
+  .payrow {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--cell); border: 1px solid var(--border); border-radius: 12px;
+    padding: 6px 6px 6px 12px;
+  }
+  .payrow .pd { color: var(--muted); font-size: 14px; min-width: 64px; }
+  .payrow .pa { flex: 1; font-weight: 800; font-size: 17px; text-align: start; }
+  .payrow button {
+    width: 40px; height: 40px; border: none; border-radius: 10px;
+    background: transparent; color: var(--danger); font-size: 18px;
+  }
+
+  .legend { display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
+  .legend span::before {
+    content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 4px;
+    margin-inline-end: 8px; vertical-align: middle;
+  }
+  .legend .lg-g::before { background: var(--gross); }
+  .legend .lg-n::before { background: var(--net); }
+  .legend .lg-o::before { background: var(--owe); }
+  .note { font-size: 14px; color: var(--muted); line-height: 1.55; }
+
+  /* ---------- Zoomed week card (long press) ---------- */
+  .week.tap { -webkit-touch-callout: none; }
+  .backdrop.center { align-items: center; padding: 16px; }
+  .zoom-card {
+    width: 100%; max-width: 360px;
+    background: var(--week-bg);
+    border-radius: 24px;
+    padding: 22px 20px 16px;
+    text-align: center;
+    display: flex; flex-direction: column; gap: 2px;
+    box-shadow: 0 20px 50px rgba(15, 23, 42, .3);
+    transform: scale(.85); transition: transform .2s ease;
+  }
+  .backdrop.open .zoom-card { transform: none; }
+  .zoom-card h2 { font-size: 19px; margin-bottom: 6px; }
+  .zoom-card .zl { font-size: 15px; color: var(--muted); font-weight: 600; margin-top: 10px; }
+  .zoom-card .zg { font-size: 40px; font-weight: 800; color: var(--gross); }
+  .zoom-card .zn { font-size: 36px; font-weight: 800; color: var(--net); }
+  .zoom-card .zp { font-size: 30px; font-weight: 800; border-radius: 14px; padding: 6px 10px; margin-top: 2px; }
+  .zoom-card .zp.ok { background: var(--net-soft); color: var(--net); }
+  .zoom-card .zp.part, .zoom-card .zp.none { background: var(--owe-soft); color: var(--owe); }
+  .zoom-card .zr { font-size: 17px; font-weight: 700; margin-top: 12px; color: var(--net); }
+  .zoom-card .zr.owe { color: var(--owe); }
+  .zoom-card .zhint { font-size: 13px; color: var(--muted); margin-top: 14px; }
+
+  .toast {
+    position: fixed; bottom: calc(24px + env(safe-area-inset-bottom)); left: 50%;
+    transform: translate(-50%, 20px); opacity: 0;
+    background: #1f2937; color: #fff; padding: 10px 18px; border-radius: 999px;
+    font-size: 15px; transition: .2s; pointer-events: none; z-index: 20;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="warn" id="warn">
+    ⚠️ בצורה שבה הקובץ נפתח עכשיו, הדפדפן לא שומר נתונים — הם <b>יימחקו</b> בסגירה.
+    פתחו את הקובץ מתוך תיקיית ההורדות בכרום.
+  </div>
+
+  <div class="bar">
+    <div class="title">
+      <h1 id="monthName"></h1>
+      <button class="today-btn" id="todayBtn">היום</button>
+    </div>
+    <button class="icon-btn" id="prevBtn" aria-label="חודש קודם">›</button>
+    <button class="icon-btn" id="nextBtn" aria-label="חודש הבא">‹</button>
+    <button class="icon-btn menu" id="menuBtn" aria-label="תפריט">⋮</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat">
+      <span class="label">ברוטו החודש</span>
+      <span class="value gross num fit" id="mGross">₪0</span>
+    </div>
+    <div class="stat net">
+      <span class="label">נטו (2%)</span>
+      <span class="value net num fit" id="mNet">₪0</span>
+    </div>
+    <div class="stat" id="oweStat">
+      <span class="label">חסר לקבל</span>
+      <span class="value num fit" id="mOwe">₪0</span>
+    </div>
+  </div>
+
+  <main class="cal" id="cal">
+    <div class="grid" id="grid"></div>
+  </main>
+</div>
+
+<!-- Day entry sheet -->
+<div class="backdrop" id="daySheet">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <h2 id="sheetTitle"></h2>
+    <label class="field">
+      <input id="amountInput" type="text" inputmode="decimal" autocomplete="off" placeholder="0" aria-label="סכום מכירות">
+      <span class="cur">₪</span>
+    </label>
+    <div class="preview"><span>עמלה (2%)</span><span class="num" id="netPreview">₪0</span></div>
+    <p class="hint">אפשר לחבר כמה מכירות: למשל 1200+850</p>
+    <div class="actions">
+      <button class="btn primary" id="saveBtn">שמירה</button>
+      <button class="btn danger" id="clearBtn">מחיקה</button>
+      <button class="btn" id="cancelBtn">ביטול</button>
+    </div>
+  </div>
+</div>
+
+<!-- Week payments sheet -->
+<div class="backdrop" id="weekSheet">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="weekTitle">
+    <h2 id="weekTitle"></h2>
+    <div class="sum3">
+      <div><span>ברוטו</span><b class="num gross fit" id="wsGross"></b></div>
+      <div><span>מגיע לי (2%)</span><b class="num net fit" id="wsNet"></b></div>
+      <div><span>קיבלתי</span><b class="num fit" id="wsPaid"></b></div>
+    </div>
+    <div class="preview" id="wsStatus"></div>
+    <div class="paylist" id="payList"></div>
+    <label class="field">
+      <input id="payInput" type="text" inputmode="decimal" autocomplete="off" placeholder="כמה קיבלתי עכשיו?" aria-label="סכום תשלום שקיבלתי">
+      <span class="cur">₪</span>
+    </label>
+    <div class="actions">
+      <button class="btn primary" id="payAddBtn">הוספת תשלום</button>
+      <button class="btn green" id="payRestBtn">קיבלתי את כל היתרה</button>
+    </div>
+    <button class="btn" id="weekClose">סגירה</button>
+  </div>
+</div>
+
+<!-- Zoomed week card (long press on a week) -->
+<div class="backdrop center" id="zoomSheet">
+  <div class="zoom-card" id="zoomCard" role="dialog" aria-modal="true"></div>
+</div>
+
+<!-- Menu sheet -->
+<div class="backdrop" id="menuSheet">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="menuTitle">
+    <h2 id="menuTitle">תפריט</h2>
+    <div class="legend">
+      <span class="lg-g">כחול — ברוטו (סך המכירות)</span>
+      <span class="lg-n">ירוק — נטו (העמלה שלי, 2%) / שולם במלואו</span>
+      <span class="lg-o">כתום — עוד לא קיבלתי את כל הכסף</span>
+    </div>
+    <p class="note">
+      • לחיצה על יום — הזנת סכום המכירות.<br>
+      • לחיצה על עמודת השבוע — רישום התשלומים שקיבלתי על אותו שבוע.<br>
+      • לחיצה ארוכה על עמודת השבוע — הצגת השבוע בגדול באמצע המסך.<br>
+      • החלקה ימינה/שמאלה על הלוח — מעבר בין חודשים.<br>
+      • "חסר לקבל" למעלה — כמה כסף עוד מגיע לי בסך הכל, מכל השבועות.
+    </p>
+    <button class="btn block" id="exportBtn">⬇️ גיבוי נתונים לקובץ</button>
+    <button class="btn block" id="importBtn">⬆️ שחזור מקובץ גיבוי</button>
+    <input type="file" id="importFile" accept=".json,application/json" hidden>
+    <p class="note">🔒 הנתונים נשמרים רק בטלפון הזה. האפליקציה לא מתחברת לאינטרנט ושום מידע לא יוצא מהמכשיר. מומלץ לגבות מדי פעם.</p>
+    <button class="btn" id="menuClose">סגירה</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var RATE = 0.02; // אחוז העמלה
+  var SALES_KEY = 'yehuda-calendar-sales-v1';    // { 'YYYY-MM-DD': amount }
+  var PAY_KEY = 'yehuda-calendar-payments-v1';   // { 'YYYY-MM-DD' (week's Sunday): [{ a: amount, d: 'YYYY-MM-DD' }] }
+  var MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+  var DAYS = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  var DAYS_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'];
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- Storage ----------
+  function testStorage() {
+    try {
+      localStorage.setItem('__t', '1');
+      var ok = localStorage.getItem('__t') === '1';
+      localStorage.removeItem('__t');
+      return ok;
+    } catch (e) { return false; }
+  }
+  function loadObj(key) {
+    try {
+      var raw = localStorage.getItem(key);
+      var obj = raw ? JSON.parse(raw) : {};
+      return obj && typeof obj === 'object' ? obj : {};
+    } catch (e) { return {}; }
+  }
+  function persist() {
+    try {
+      localStorage.setItem(SALES_KEY, JSON.stringify(sales));
+      localStorage.setItem(PAY_KEY, JSON.stringify(payments));
+    } catch (e) { $('warn').classList.add('show'); }
+  }
+
+  var sales = loadObj(SALES_KEY);
+  var payments = loadObj(PAY_KEY);
+  if (!testStorage()) $('warn').classList.add('show');
+
+  // ---------- Formatting & dates ----------
+  function round2(n) { return Math.round(n * 100) / 100; }
+  function money(n) {
+    return '₪' + round2(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  }
+  function compact(n) {
+    var a = Math.abs(n);
+    if (a < 100) return String(Math.round(n * 10) / 10);
+    if (a < 10000) return Math.round(n).toLocaleString('en-US');
+    if (a < 99950) return (Math.round(n / 100) / 10) + 'K';
+    if (a < 999500) return Math.round(n / 1000) + 'K';
+    return (Math.round(n / 1e5) / 10) + 'M';
+  }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function keyOf(y, m, d) { return y + '-' + pad(m + 1) + '-' + pad(d); }
+  function keyOfDate(dt) { return keyOf(dt.getFullYear(), dt.getMonth(), dt.getDate()); }
+  function parseKey(k) { var p = k.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function addDays(dt, n) { return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + n); }
+  function weekStart(dt) { return addDays(dt, -dt.getDay()); }
+
+  function parseAmount(str) {
+    str = String(str).replace(/[₪,\s]/g, '');
+    if (str === '') return 0;
+    var parts = str.split('+'), total = 0;
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i] === '') continue;
+      var n = Number(parts[i]);
+      if (!isFinite(n)) return NaN;
+      total += n;
+    }
+    return round2(total);
+  }
+
+  // ---------- Money logic ----------
+  function saleOn(k) { var v = sales[k]; return typeof v === 'number' ? v : 0; }
+  function weekGross(wk) {
+    var s = parseKey(wk), t = 0;
+    for (var i = 0; i < 7; i++) t += saleOn(keyOfDate(addDays(s, i)));
+    return round2(t);
+  }
+  function paidList(wk) { return Array.isArray(payments[wk]) ? payments[wk] : []; }
+  function paidTotal(wk) {
+    return round2(paidList(wk).reduce(function (s, p) { return s + (+p.a || 0); }, 0));
+  }
+  // Everything I've earned minus everything I've received, across all weeks
+  function totalOwed() {
+    var earned = 0, received = 0, k;
+    for (k in sales) earned += saleOn(k) * RATE;
+    for (k in payments) received += paidTotal(k);
+    return Math.max(0, round2(earned - received));
+  }
+  function payState(net, paid) {
+    if (net > 0 && paid >= net - 0.005) return 'ok';
+    return paid > 0 ? 'part' : 'none';
+  }
+
+  // ---------- State ----------
+  var now = new Date();
+  var view = { y: now.getFullYear(), m: now.getMonth() };
+
+  var DOW_HTML = DAYS_SHORT.map(function (s) { return '<div class="dow">' + s + '</div>'; }).join('') +
+    '<div class="dow wk">שבוע</div>';
+
+  // ---------- Render ----------
+  function render() {
+    var y = view.y, m = view.m;
+    var first = new Date(y, m, 1).getDay();
+    var dim = new Date(y, m + 1, 0).getDate();
+    var weeks = Math.ceil((first + dim) / 7);
+    var todayKey = keyOfDate(new Date());
+    var gridStart = new Date(y, m, 1 - first);
+
+    var html = DOW_HTML, mGross = 0;
+
+    for (var w = 0; w < weeks; w++) {
+      var wkDate = addDays(gridStart, w * 7);
+      var wk = keyOfDate(wkDate);
+      var wGross = 0;
+
+      for (var c = 0; c < 7; c++) {
+        var dt = addDays(wkDate, c);
+        var k = keyOfDate(dt);
+        var d = dt.getDate();
+        var inMonth = dt.getMonth() === m;
+        var v = saleOn(k);
+        var has = v !== 0;
+        var cls = 'day' + (has ? ' has' : '') + (k === todayKey ? ' today' : '') + (inMonth ? '' : ' out');
+        html += '<button class="' + cls + '" data-key="' + k + '" aria-label="' + d + ' ' + MONTHS[dt.getMonth()] + (has ? ', ' + money(v) : '') + '">';
+        html += '<span class="d">' + d + '</span>';
+        if (has) {
+          html += '<span class="amt num fit">' + compact(v) + '</span>';
+          html += '<span class="dnet num fit">' + compact(v * RATE) + '</span>';
+        }
+        html += '</button>';
+        wGross += v;
+        if (inMonth) mGross += v;
+      }
+
+      var net = wGross * RATE, paid = paidTotal(wk);
+      if (wGross || paid) {
+        var st = payState(net, paid);
+        html += '<button class="week tap" data-wk="' + wk + '" aria-label="שבוע: תשלומים">';
+        html += '<span class="lbl">ברוטו</span><span class="wk-g num fit">' + compact(wGross) + '</span>';
+        html += '<span class="lbl">נטו</span><span class="wk-n num fit">' + compact(net) + '</span>';
+        html += '<span class="lbl">קיבלתי</span><span class="wk-p ' + st + ' num fit">' + (st === 'ok' ? '✓ ' : '') + compact(paid) + '</span>';
+        html += '</button>';
+      } else {
+        html += '<div class="week"><span class="dash">—</span></div>';
+      }
+    }
+
+    var grid = $('grid');
+    grid.style.gridTemplateRows = 'auto repeat(' + weeks + ', minmax(0, 1fr))';
+    grid.innerHTML = html;
+    $('monthName').textContent = MONTHS[m] + ' ' + y;
+    $('mGross').textContent = money(mGross);
+    $('mNet').textContent = money(mGross * RATE);
+
+    var owed = totalOwed();
+    $('mOwe').textContent = owed > 0 ? money(owed) : '✓ ₪0';
+    $('oweStat').className = 'stat ' + (owed > 0 ? 'owe' : 'clear');
+
+    var t = new Date();
+    $('todayBtn').classList.toggle('show', !(y === t.getFullYear() && m === t.getMonth()));
+    fitText();
+  }
+
+  // Shrink text that doesn't fit its box (narrow phones / large system font)
+  function fitText() {
+    var grid = $('grid');
+    grid.classList.remove('tight');
+    var weeks = grid.querySelectorAll('.week');
+    for (var i = 0; i < weeks.length; i++) {
+      if (weeks[i].scrollHeight > weeks[i].clientHeight + 1) { grid.classList.add('tight'); break; }
+    }
+    var els = document.querySelectorAll('.fit');
+    for (var j = 0; j < els.length; j++) {
+      var el = els[j];
+      el.style.fontSize = '';
+      if (!el.clientWidth) continue;
+      var size = parseFloat(getComputedStyle(el).fontSize);
+      while (el.scrollWidth > el.clientWidth && size > 8) {
+        size -= 0.5;
+        el.style.fontSize = size + 'px';
+      }
+    }
+  }
+  window.addEventListener('resize', fitText);
+
+  function shift(delta) {
+    var d = new Date(view.y, view.m + delta, 1);
+    view.y = d.getFullYear(); view.m = d.getMonth();
+    render();
+    var grid = $('grid');
+    grid.classList.remove('slide-next', 'slide-prev');
+    void grid.offsetWidth;
+    grid.classList.add(delta > 0 ? 'slide-next' : 'slide-prev');
+  }
+
+  $('prevBtn').addEventListener('click', function () { shift(-1); });
+  $('nextBtn').addEventListener('click', function () { shift(1); });
+  $('todayBtn').addEventListener('click', function () {
+    var t = new Date();
+    var delta = (t.getFullYear() - view.y) * 12 + (t.getMonth() - view.m);
+    if (delta) shift(delta);
+  });
+
+  // Swipe between months (RTL: swipe right = next month, like turning a Hebrew page)
+  var touch = null, swiped = false;
+  $('cal').addEventListener('touchstart', function (e) {
+    var t = e.touches[0];
+    touch = { x: t.clientX, y: t.clientY };
+    swiped = false;
+  }, { passive: true });
+  $('cal').addEventListener('touchend', function (e) {
+    if (!touch) return;
+    var t = e.changedTouches[0];
+    var dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+    touch = null;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      swiped = true;
+      shift(dx > 0 ? 1 : -1);
+    }
+  });
+
+  // ---------- Sheets ----------
+  var SHEETS = ['daySheet', 'weekSheet', 'zoomSheet', 'menuSheet'];
+  var editingKey = null, editingWeek = null;
+  var input = $('amountInput'), payInput = $('payInput');
+
+  // Each open sheet adds a history entry, so the phone's Back button closes it
+  function openSheet(id) {
+    $(id).classList.add('open');
+    try { history.pushState({ sheet: id }, ''); } catch (e) {}
+  }
+  function closeSheet(id) {
+    if (!$(id).classList.contains('open')) return;
+    $(id).classList.remove('open');
+    if (history.state && history.state.sheet === id) history.back();
+  }
+  window.addEventListener('popstate', function () {
+    SHEETS.forEach(function (id) { $(id).classList.remove('open'); });
+    editingKey = editingWeek = null;
+    if (document.activeElement) document.activeElement.blur();
+  });
+
+  // ---------- Day entry ----------
+  function updatePreview() {
+    var n = parseAmount(input.value);
+    $('netPreview').textContent = isNaN(n) ? '—' : money(n * RATE);
+    $('saveBtn').disabled = isNaN(n);
+  }
+
+  function openDay(key) {
+    editingKey = key;
+    var dt = parseKey(key);
+    $('sheetTitle').textContent = 'יום ' + DAYS[dt.getDay()] + ', ' + dt.getDate() + ' ב' + MONTHS[dt.getMonth()];
+    var v = saleOn(key);
+    input.value = v ? String(v) : '';
+    $('clearBtn').style.display = v ? '' : 'none';
+    updatePreview();
+    openSheet('daySheet');
+    setTimeout(function () { input.focus(); input.select(); }, 60);
+  }
+
+  function closeDay() {
+    input.blur();
+    closeSheet('daySheet');
+    editingKey = null;
+  }
+
+  function saveDay() {
+    if (!editingKey) return;
+    var n = parseAmount(input.value);
+    if (isNaN(n)) return;
+    if (n === 0) delete sales[editingKey];
+    else sales[editingKey] = n;
+    persist();
+    closeDay();
+    render();
+    toast(n === 0 ? 'הסכום נמחק' : 'נשמר ✓');
+  }
+
+  input.addEventListener('input', updatePreview);
+  input.addEventListener('keydown', function (e) { if (e.key === 'Enter') saveDay(); });
+  $('saveBtn').addEventListener('click', saveDay);
+  $('clearBtn').addEventListener('click', function () { input.value = ''; saveDay(); });
+  $('cancelBtn').addEventListener('click', closeDay);
+  $('daySheet').addEventListener('click', function (e) { if (e.target === this) closeDay(); });
+
+  // ---------- Week payments ----------
+  function weekTitle(wk) {
+    var s = parseKey(wk), e = addDays(s, 6);
+    if (s.getMonth() === e.getMonth()) return 'שבוע <span class="num">' + s.getDate() + '–' + e.getDate() + '</span> ב' + MONTHS[e.getMonth()];
+    return 'שבוע ' + s.getDate() + ' ב' + MONTHS[s.getMonth()] + ' – ' + e.getDate() + ' ב' + MONTHS[e.getMonth()];
+  }
+
+  function fillWeek() {
+    var wk = editingWeek;
+    var gross = weekGross(wk), net = round2(gross * RATE), paid = paidTotal(wk);
+    var rest = round2(net - paid);
+    $('weekTitle').innerHTML = weekTitle(wk);
+    $('wsGross').textContent = money(gross);
+    $('wsNet').textContent = money(net);
+    $('wsPaid').textContent = money(paid);
+
+    var status = $('wsStatus');
+    if (rest > 0.005) {
+      status.className = 'preview owe';
+      status.innerHTML = '<span>נשאר לקבל על השבוע</span><span class="num">' + money(rest) + '</span>';
+    } else if (rest < -0.005) {
+      status.className = 'preview';
+      status.innerHTML = '<span>קיבלתי יותר מהמגיע ב־</span><span class="num">' + money(-rest) + '</span>';
+    } else {
+      status.className = 'preview';
+      status.innerHTML = '<span>✓ קיבלתי את כל הכסף על השבוע</span><span></span>';
+    }
+    $('payRestBtn').style.display = rest > 0.005 ? '' : 'none';
+
+    var list = paidList(wk), html = '';
+    if (list.length) {
+      html = '<h3>תשלומים שקיבלתי</h3>';
+      list.forEach(function (p, i) {
+        var d = p.d ? parseKey(p.d) : null;
+        html += '<div class="payrow">' +
+          '<span class="pd">' + (d ? d.getDate() + '.' + (d.getMonth() + 1) : '') + '</span>' +
+          '<span class="pa num">' + money(p.a) + '</span>' +
+          '<button data-i="' + i + '" aria-label="מחיקת תשלום">✕</button></div>';
+      });
+    }
+    $('payList').innerHTML = html;
+    fitText();
+  }
+
+  function openWeek(wk) {
+    editingWeek = wk;
+    payInput.value = '';
+    openSheet('weekSheet');
+    fillWeek();
+  }
+
+  function addPayment(amount) {
+    if (!editingWeek || !(amount > 0)) return;
+    var list = paidList(editingWeek).slice();
+    list.push({ a: round2(amount), d: keyOfDate(new Date()) });
+    payments[editingWeek] = list;
+    persist();
+    payInput.value = '';
+    payInput.blur();
+    fillWeek();
+    render();
+    toast('התשלום נרשם ✓');
+  }
+
+  $('payAddBtn').addEventListener('click', function () {
+    var n = parseAmount(payInput.value);
+    if (isNaN(n) || n <= 0) { payInput.focus(); return; }
+    addPayment(n);
+  });
+  payInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') $('payAddBtn').click(); });
+  $('payRestBtn').addEventListener('click', function () {
+    addPayment(round2(weekGross(editingWeek) * RATE - paidTotal(editingWeek)));
+  });
+  $('payList').addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-i]');
+    if (!b) return;
+    var list = paidList(editingWeek).slice();
+    var i = +b.getAttribute('data-i');
+    if (!confirm('למחוק את התשלום של ' + money(list[i].a) + '?')) return;
+    list.splice(i, 1);
+    if (list.length) payments[editingWeek] = list; else delete payments[editingWeek];
+    persist();
+    fillWeek();
+    render();
+    toast('התשלום נמחק');
+  });
+  $('weekClose').addEventListener('click', function () { payInput.blur(); closeSheet('weekSheet'); editingWeek = null; });
+  $('weekSheet').addEventListener('click', function (e) {
+    if (e.target === this) { payInput.blur(); closeSheet('weekSheet'); editingWeek = null; }
+  });
+
+  // ---------- Zoomed week (long press) ----------
+  var zoomOpenedAt = 0;
+  function openZoom(wk) {
+    var gross = weekGross(wk), net = round2(gross * RATE), paid = paidTotal(wk);
+    var rest = round2(net - paid), st = payState(net, paid);
+    var html = '<h2>' + weekTitle(wk) + '</h2>' +
+      '<span class="zl">ברוטו</span><span class="zg num fit">' + money(gross) + '</span>' +
+      '<span class="zl">נטו (2%)</span><span class="zn num fit">' + money(net) + '</span>' +
+      '<span class="zl">קיבלתי</span><span class="zp ' + st + ' num fit">' + (st === 'ok' ? '✓ ' : '') + money(paid) + '</span>';
+    if (rest > 0.005) html += '<span class="zr owe">נשאר לקבל: <span class="num">' + money(rest) + '</span></span>';
+    else if (rest < -0.005) html += '<span class="zr">קיבלתי יותר ב־<span class="num">' + money(-rest) + '</span></span>';
+    else html += '<span class="zr">✓ קיבלתי את כל הכסף</span>';
+    html += '<span class="zhint">לחיצה בכל מקום לסגירה</span>';
+    $('zoomCard').innerHTML = html;
+    zoomOpenedAt = Date.now();
+    openSheet('zoomSheet');
+    fitText();
+  }
+  $('zoomSheet').addEventListener('click', function () {
+    if (Date.now() - zoomOpenedAt > 400) closeSheet('zoomSheet');
+  });
+
+  var pressTimer = null, pressStart = null, longPressed = false;
+  function cancelPress() { clearTimeout(pressTimer); pressTimer = null; }
+  $('grid').addEventListener('pointerdown', function (e) {
+    longPressed = false;
+    var week = e.target.closest('.week.tap');
+    if (!week) return;
+    pressStart = { x: e.clientX, y: e.clientY };
+    cancelPress();
+    pressTimer = setTimeout(function () {
+      pressTimer = null;
+      longPressed = true;
+      if (navigator.vibrate) navigator.vibrate(15);
+      openZoom(week.getAttribute('data-wk'));
+    }, 450);
+  });
+  $('grid').addEventListener('pointermove', function (e) {
+    if (pressTimer && Math.abs(e.clientX - pressStart.x) + Math.abs(e.clientY - pressStart.y) > 10) cancelPress();
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
+    $('grid').addEventListener(ev, cancelPress);
+  });
+  $('grid').addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  // ---------- Grid taps ----------
+  $('grid').addEventListener('click', function (e) {
+    if (longPressed) { longPressed = false; return; }
+    if (swiped) { swiped = false; return; }
+    var day = e.target.closest('.day');
+    if (day) { openDay(day.getAttribute('data-key')); return; }
+    var week = e.target.closest('.week.tap');
+    if (week) openWeek(week.getAttribute('data-wk'));
+  });
+
+  // ---------- Menu ----------
+  $('menuBtn').addEventListener('click', function () { openSheet('menuSheet'); });
+  $('menuClose').addEventListener('click', function () { closeSheet('menuSheet'); });
+  $('menuSheet').addEventListener('click', function (e) { if (e.target === this) closeSheet('menuSheet'); });
+
+  // ---------- Toast ----------
+  var toastTimer;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1600);
+  }
+
+  // ---------- Backup ----------
+  $('exportBtn').addEventListener('click', function () {
+    var t = new Date();
+    var payload = { app: 'yehuda-calander', version: 2, exported: t.toISOString(), sales: sales, payments: payments };
+    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'sales-backup-' + keyOfDate(t) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  });
+
+  var DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  $('importBtn').addEventListener('click', function () { $('importFile').click(); });
+  $('importFile').addEventListener('change', function () {
+    var file = this.files && this.files[0];
+    this.value = '';
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+      try {
+        var obj = JSON.parse(reader.result);
+        var srcSales = obj && obj.sales ? obj.sales : obj;
+        var srcPay = obj && obj.payments ? obj.payments : {};
+        var cleanSales = {}, cleanPay = {}, nSales = 0, nPay = 0, k;
+        for (k in srcSales) {
+          if (DATE_RE.test(k) && typeof srcSales[k] === 'number' && isFinite(srcSales[k]) && srcSales[k] !== 0) {
+            cleanSales[k] = round2(srcSales[k]); nSales++;
+          }
+        }
+        for (k in srcPay) {
+          if (!DATE_RE.test(k) || !Array.isArray(srcPay[k])) continue;
+          var list = srcPay[k].filter(function (p) {
+            return p && typeof p.a === 'number' && isFinite(p.a) && p.a > 0;
+          }).map(function (p) {
+            return { a: round2(p.a), d: DATE_RE.test(p.d) ? p.d : k };
+          });
+          if (list.length) { cleanPay[k] = list; nPay += list.length; }
+        }
+        if (!confirm('לשחזר ' + nSales + ' ימי מכירה ו־' + nPay + ' תשלומים מהגיבוי? הנתונים הנוכחיים יוחלפו.')) return;
+        sales = cleanSales;
+        payments = cleanPay;
+        persist();
+        render();
+        closeSheet('menuSheet');
+        toast('הגיבוי שוחזר ✓');
+      } catch (e) {
+        alert('הקובץ לא תקין — לא ניתן לשחזר ממנו.');
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // Re-render when returning to the app (e.g. the next day)
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    sales = loadObj(SALES_KEY);
+    payments = loadObj(PAY_KEY);
+    render();
+  });
+
+  render();
+
+  // Installed-app support: works offline once opened from the website (not when opened as a file)
+  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  }
+  // Ask the browser never to clear this app's data on its own
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {});
+})();
+</script>
+</body>
+</html>
