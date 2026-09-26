@@ -1,6 +1,6 @@
 // Offline support: keeps a copy of the app's files on the phone.
 // Only the app's own files are cached — sales data lives in localStorage and never leaves the device.
-var CACHE = 'yehuda-calendar-v1';
+var CACHE = 'yehuda-calendar-v2';
 var FILES = [
   './',
   './index.html',
